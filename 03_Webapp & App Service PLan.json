@@ -1,0 +1,67 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "msazurewebapp0909Name": {
+            "type": "string",
+            "minLength": 1
+        },
+        "msazurewebapp0909SKU": {
+            "type": "string",
+            "allowedValues": [
+                "Free",
+                "Shared",
+                "Basic",
+                "Standard"
+            ],
+            "defaultValue": "Free"
+        },
+        "msazurewebapp0909WorkerSize": {
+            "type": "string",
+            "allowedValues": [
+                "0",
+                "1",
+                "2"
+            ],
+            "defaultValue": "0"
+        }
+    },
+    "resources": [
+        {
+            "name": "[parameters('msazurewebapp0909Name')]",
+            "type": "Microsoft.Web/serverfarms",
+            "location": "[resourceGroup().location]",
+            "apiVersion": "2014-06-01",
+            "dependsOn": [],
+            "tags": {
+                "displayName": "msazurewebapp0909"
+            },
+            "properties": {
+                "name": "[parameters('msazurewebapp0909Name')]",
+                "sku": "[parameters('msazurewebapp0909SKU')]",
+                "workerSize": "[parameters('msazurewebapp0909WorkerSize')]",
+                "numberOfWorkers": 1
+            }
+        },
+        {
+            "name": "[variables('msazurewebapp909009Name')]",
+            "type": "Microsoft.Web/sites",
+            "location": "[resourceGroup().location]",
+            "apiVersion": "2015-08-01",
+            "dependsOn": [
+                "[concat('Microsoft.Web/serverfarms/', parameters('msazurewebapp0909Name'))]"
+            ],
+            "tags": {
+                "[concat('hidden-related:', resourceGroup().id, '/providers/Microsoft.Web/serverfarms/', parameters('msazurewebapp0909Name'))]": "Resource",
+                "displayName": "msazurewebapp909009"
+            },
+            "properties": {
+                "name": "[variables('msazurewebapp909009Name')]",
+                "serverFarmId": "[resourceId('Microsoft.Web/serverfarms/', parameters('msazurewebapp0909Name'))]"
+            }
+        }
+    ],
+    "variables": {
+        "msazurewebapp909009Name": "[concat('msazurewebapp909009', uniqueString(resourceGroup().id))]"
+    }
+}
