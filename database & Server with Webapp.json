@@ -1,0 +1,157 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "armappsvcplan202022Name": {
+            "minLength": 1,
+            "type": "String"
+        },
+        "armappsvcplan202022SKU": {
+            "defaultValue": "Free",
+            "allowedValues": [
+                "Free",
+                "Shared",
+                "Basic",
+                "Standard"
+            ],
+            "type": "String"
+        },
+        "armappsvcplan202022WorkerSize": {
+            "defaultValue": "0",
+            "allowedValues": [
+                "0",
+                "1",
+                "2"
+            ],
+            "type": "String"
+        },
+        "azuresqlserver20222AdminLogin": {
+            "type": "string",
+            "minLength": 1
+        },
+        "azuresqlserver20222AdminLoginPassword": {
+            "type": "securestring"
+        },
+        "msazuredb202022Name": {
+            "type": "string",
+            "minLength": 1
+        },
+        "msazuredb202022Collation": {
+            "type": "string",
+            "minLength": 1,
+            "defaultValue": "SQL_Latin1_General_CP1_CI_AS"
+        },
+        "msazuredb202022Edition": {
+            "type": "string",
+            "defaultValue": "Basic",
+            "allowedValues": [
+                "Basic",
+                "Standard",
+                "Premium"
+            ]
+        },
+        "msazuredb202022RequestedServiceObjectiveName": {
+            "type": "string",
+            "defaultValue": "Basic",
+            "allowedValues": [
+                "Basic",
+                "S0",
+                "S1",
+                "S2",
+                "P1",
+                "P2",
+                "P3"
+            ],
+            "metadata": {
+                "description": "Describes the performance level for Edition"
+            }
+        }
+    },
+    "variables": {
+        "armwebapp2020222Name": "[concat('armwebapp2020222', uniqueString(resourceGroup().id))]",
+        "azuresqlserver20222Name": "[concat('azuresqlserver20222', uniqueString(resourceGroup().id))]",
+        "fullyQualifiedmsazuredb202022Name": "[concat(variables('azuresqlserver20222Name'), '/', parameters('msazuredb202022Name'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/serverfarms",
+            "apiVersion": "2014-06-01",
+            "name": "[parameters('armappsvcplan202022Name')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [],
+            "tags": {
+                "displayName": "armappsvcplan202022"
+            },
+            "properties": {
+                "name": "[parameters('armappsvcplan202022Name')]",
+                "sku": "[parameters('armappsvcplan202022SKU')]",
+                "workerSize": "[parameters('armappsvcplan202022WorkerSize')]",
+                "numberOfWorkers": 1
+            }
+        },
+        {
+            "type": "Microsoft.Web/sites",
+            "apiVersion": "2015-08-01",
+            "name": "[variables('armwebapp2020222Name')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[concat('Microsoft.Web/serverfarms/', parameters('armappsvcplan202022Name'))]"
+            ],
+            "tags": {
+                "[concat('hidden-related:', resourceGroup().id, '/providers/Microsoft.Web/serverfarms/', parameters('armappsvcplan202022Name'))]": "Resource",
+                "displayName": "armwebapp2020222"
+            },
+            "properties": {
+                "name": "[variables('armwebapp2020222Name')]",
+                "serverFarmId": "[resourceId('Microsoft.Web/serverfarms/', parameters('armappsvcplan202022Name'))]"
+            }
+        },
+        {
+            "name": "[variables('azuresqlserver20222Name')]",
+            "type": "Microsoft.Sql/servers",
+            "location": "[resourceGroup().location]",
+            "apiVersion": "2014-04-01-preview",
+            "dependsOn": [],
+            "tags": {
+                "displayName": "azuresqlserver20222"
+            },
+            "properties": {
+                "administratorLogin": "[parameters('azuresqlserver20222AdminLogin')]",
+                "administratorLoginPassword": "[parameters('azuresqlserver20222AdminLoginPassword')]"
+            },
+            "resources": [
+                {
+                    "name": "AllowAllWindowsAzureIps",
+                    "type": "firewallrules",
+                    "location": "[resourceGroup().location]",
+                    "apiVersion": "2014-04-01-preview",
+                    "dependsOn": [
+                        "[concat('Microsoft.Sql/servers/', variables('azuresqlserver20222Name'))]"
+                    ],
+                    "properties": {
+                        "startIpAddress": "0.0.0.0",
+                        "endIpAddress": "0.0.0.0"
+                    }
+                }
+            ]
+        },
+        {
+            "name": "[variables('fullyQualifiedmsazuredb202022Name')]",
+            "type": "Microsoft.Sql/servers/databases",
+            "location": "[resourceGroup().location]",
+            "apiVersion": "2014-04-01-preview",
+            "dependsOn": [
+                "[resourceId('Microsoft.Sql/servers', variables('azuresqlserver20222Name'))]"
+            ],
+            "tags": {
+                "displayName": "msazuredb202022"
+            },
+            "properties": {
+                "collation": "[parameters('msazuredb202022Collation')]",
+                "edition": "[parameters('msazuredb202022Edition')]",
+                "maxSizeBytes": "1073741824",
+                "requestedServiceObjectiveName": "[parameters('msazuredb202022RequestedServiceObjectiveName')]"
+            }
+        }
+    ]
+}
