@@ -1,0 +1,319 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "mysqldatabaseName": {
+            "minLength": 1,
+            "type": "String"
+        },
+        "mysqldatabaseCollation": {
+            "defaultValue": "SQL_Latin1_General_CP1_CI_AS",
+            "minLength": 1,
+            "type": "String"
+        },
+        "mysqldatabaseEdition": {
+            "defaultValue": "Basic",
+            "allowedValues": [
+                "Basic",
+                "Standard",
+                "Premium"
+            ],
+            "type": "String"
+        },
+        "mysqldatabaseRequestedServiceObjectiveName": {
+            "defaultValue": "Basic",
+            "allowedValues": [
+                "Basic",
+                "S0",
+                "S1",
+                "S2",
+                "P1",
+                "P2",
+                "P3"
+            ],
+            "type": "String",
+            "metadata": {
+                "description": "Describes the performance level for Edition"
+            }
+        },
+        "mysqlserverAdminLogin": {
+            "minLength": 1,
+            "type": "String"
+        },
+        "mysqlserverAdminLoginPassword": {
+            "type": "SecureString"
+        },
+        "myazureappsvcplanName": {
+            "minLength": 1,
+            "type": "String"
+        },
+        "myazureappsvcplanSKU": {
+            "defaultValue": "Free",
+            "allowedValues": [
+                "Free",
+                "Shared",
+                "Basic",
+                "Standard"
+            ],
+            "type": "String"
+        },
+        "myazureappsvcplanWorkerSize": {
+            "defaultValue": "0",
+            "allowedValues": [
+                "0",
+                "1",
+                "2"
+            ],
+            "type": "String"
+        },
+        "armvmName": {
+            "minLength": 1,
+            "type": "String"
+        },
+        "armvmAdminUserName": {
+            "minLength": 1,
+            "type": "String"
+        },
+        "armvmAdminPassword": {
+            "type": "SecureString"
+        },
+        "armvmWindowsOSVersion": {
+            "defaultValue": "2019-Datacenter",
+            "allowedValues": [
+                "2008-R2-SP1",
+                "2012-Datacenter",
+                "2019-Datacenter",
+                "2012-R2-Datacenter",
+                "Windows-Server-Technical-Preview"
+            ],
+            "type": "String"
+        },
+        "azarm202022Type": {
+            "defaultValue": "Standard_LRS",
+            "allowedValues": [
+                "Standard_LRS",
+                "Standard_ZRS",
+                "Standard_GRS",
+                "Standard_RAGRS",
+                "Premium_LRS"
+            ],
+            "type": "String"
+        }
+    },
+    "variables": {
+        "fullyQualifiedmysqldatabaseName": "[concat(variables('mysqlserverName'), '/', parameters('mysqldatabaseName'))]",
+        "mysqlserverName": "[concat('mysqlserver', uniqueString(resourceGroup().id))]",
+        "myazurewebappName": "[concat('myazurewebapp', uniqueString(resourceGroup().id))]",
+        "armvmImagePublisher": "MicrosoftWindowsServer",
+        "armvmImageOffer": "WindowsServer",
+        "armvmOSDiskName": "armvmOSDisk",
+        "armvmVmSize": "Standard_D2s_v3",
+        "armvmVnetID": "[resourceId('Microsoft.Network/virtualNetworks', 'armvnet')]",
+        "armvmSubnetRef": "[concat(variables('armvmVnetID'), '/subnets/', variables('armvnetSubnet1Name'))]",
+        "armvmStorageAccountContainerName": "vhds",
+        "armvmNicName": "[concat(parameters('armvmName'), 'NetworkInterface')]",
+        "azarm202022Name": "[concat('azarm202022', uniqueString(resourceGroup().id))]",
+        "armvnetPrefix": "10.0.0.0/16",
+        "armvnetSubnet1Name": "Subnet-1",
+        "armvnetSubnet1Prefix": "10.0.0.0/24",
+        "armvnetSubnet2Name": "Subnet-2",
+        "armvnetSubnet2Prefix": "10.0.1.0/24"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Sql/servers/databases",
+            "apiVersion": "2014-04-01-preview",
+            "name": "[variables('fullyQualifiedmysqldatabaseName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Sql/servers', variables('mysqlserverName'))]"
+            ],
+            "tags": {
+                "displayName": "mysqldatabase"
+            },
+            "properties": {
+                "collation": "[parameters('mysqldatabaseCollation')]",
+                "edition": "[parameters('mysqldatabaseEdition')]",
+                "maxSizeBytes": "1073741824",
+                "requestedServiceObjectiveName": "[parameters('mysqldatabaseRequestedServiceObjectiveName')]"
+            }
+        },
+        {
+            "type": "Microsoft.Sql/servers",
+            "apiVersion": "2014-04-01-preview",
+            "name": "[variables('mysqlserverName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [],
+            "tags": {
+                "displayName": "mysqlserver"
+            },
+            "properties": {
+                "administratorLogin": "[parameters('mysqlserverAdminLogin')]",
+                "administratorLoginPassword": "[parameters('mysqlserverAdminLoginPassword')]"
+            },
+            "resources": [
+                {
+                    "type": "firewallrules",
+                    "apiVersion": "2014-04-01-preview",
+                    "name": "AllowAllWindowsAzureIps",
+                    "location": "[resourceGroup().location]",
+                    "dependsOn": [
+                        "[concat('Microsoft.Sql/servers/', variables('mysqlserverName'))]"
+                    ],
+                    "properties": {
+                        "startIpAddress": "0.0.0.0",
+                        "endIpAddress": "0.0.0.0"
+                    }
+                }
+            ]
+        },
+        {
+            "type": "Microsoft.Web/sites",
+            "apiVersion": "2015-08-01",
+            "name": "[variables('myazurewebappName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[concat('Microsoft.Web/serverfarms/', parameters('myazureappsvcplanName'))]"
+            ],
+            "tags": {
+                "[concat('hidden-related:', resourceGroup().id, '/providers/Microsoft.Web/serverfarms/', parameters('myazureappsvcplanName'))]": "Resource",
+                "displayName": "myazurewebapp"
+            },
+            "properties": {
+                "name": "[variables('myazurewebappName')]",
+                "serverFarmId": "[resourceId('Microsoft.Web/serverfarms/', parameters('myazureappsvcplanName'))]"
+            }
+        },
+        {
+            "type": "Microsoft.Web/serverfarms",
+            "apiVersion": "2014-06-01",
+            "name": "[parameters('myazureappsvcplanName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [],
+            "tags": {
+                "displayName": "myazureappsvcplan"
+            },
+            "properties": {
+                "name": "[parameters('myazureappsvcplanName')]",
+                "sku": "[parameters('myazureappsvcplanSKU')]",
+                "workerSize": "[parameters('myazureappsvcplanWorkerSize')]",
+                "numberOfWorkers": 1
+            }
+        },
+        {
+            "type": "Microsoft.Network/networkInterfaces",
+            "apiVersion": "2015-06-15",
+            "name": "[variables('armvmNicName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[concat('Microsoft.Network/virtualNetworks/', 'armvnet')]"
+            ],
+            "tags": {
+                "displayName": "armvmNic"
+            },
+            "properties": {
+                "ipConfigurations": [
+                    {
+                        "name": "ipconfig1",
+                        "properties": {
+                            "privateIPAllocationMethod": "Dynamic",
+                            "subnet": {
+                                "id": "[variables('armvmSubnetRef')]"
+                            }
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "type": "Microsoft.Compute/virtualMachines",
+            "apiVersion": "2015-06-15",
+            "name": "[parameters('armvmName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[concat('Microsoft.Storage/storageAccounts/', variables('azarm202022Name'))]",
+                "[concat('Microsoft.Network/networkInterfaces/', variables('armvmNicName'))]"
+            ],
+            "tags": {
+                "displayName": "armvm"
+            },
+            "properties": {
+                "hardwareProfile": {
+                    "vmSize": "[variables('armvmVmSize')]"
+                },
+                "osProfile": {
+                    "computerName": "[parameters('armvmName')]",
+                    "adminUsername": "[parameters('armvmAdminUsername')]",
+                    "adminPassword": "[parameters('armvmAdminPassword')]"
+                },
+                "storageProfile": {
+                    "imageReference": {
+                        "publisher": "[variables('armvmImagePublisher')]",
+                        "offer": "[variables('armvmImageOffer')]",
+                        "sku": "[parameters('armvmWindowsOSVersion')]",
+                        "version": "latest"
+                    },
+                    "osDisk": {
+                        "name": "armvmOSDisk",
+                        "vhd": {
+                            "uri": "[concat('http://', variables('azarm202022Name'), '.blob.core.windows.net/', variables('armvmStorageAccountContainerName'), '/', variables('armvmOSDiskName'), '.vhd')]"
+                        },
+                        "caching": "ReadWrite",
+                        "createOption": "FromImage"
+                    }
+                },
+                "networkProfile": {
+                    "networkInterfaces": [
+                        {
+                            "id": "[resourceId('Microsoft.Network/networkInterfaces', variables('armvmNicName'))]"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts",
+            "apiVersion": "2015-06-15",
+            "name": "[variables('azarm202022Name')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [],
+            "tags": {
+                "displayName": "azarm202022"
+            },
+            "properties": {
+                "accountType": "[parameters('azarm202022Type')]"
+            }
+        },
+        {
+            "type": "Microsoft.Network/virtualNetworks",
+            "apiVersion": "2015-06-15",
+            "name": "armvnet",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [],
+            "tags": {
+                "displayName": "armvnet"
+            },
+            "properties": {
+                "addressSpace": {
+                    "addressPrefixes": [
+                        "[variables('armvnetPrefix')]"
+                    ]
+                },
+                "subnets": [
+                    {
+                        "name": "[variables('armvnetSubnet1Name')]",
+                        "properties": {
+                            "addressPrefix": "[variables('armvnetSubnet1Prefix')]"
+                        }
+                    },
+                    {
+                        "name": "[variables('armvnetSubnet2Name')]",
+                        "properties": {
+                            "addressPrefix": "[variables('armvnetSubnet2Prefix')]"
+                        }
+                    }
+                ]
+            }
+        }
+    ]
+}

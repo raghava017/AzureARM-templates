@@ -1,0 +1,416 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "azstorageaccountType": {
+            "defaultValue": "Standard_LRS",
+            "allowedValues": [
+                "Standard_LRS",
+                "Standard_ZRS",
+                "Standard_GRS",
+                "Standard_RAGRS",
+                "Premium_LRS"
+            ],
+            "type": "String"
+        },
+        "windowsserverName": {
+            "minLength": 1,
+            "type": "String"
+        },
+        "windowsserverAdminUserName": {
+            "minLength": 1,
+            "type": "String"
+        },
+        "windowsserverAdminPassword": {
+            "type": "SecureString"
+        },
+        "windowsserverWindowsOSVersion": {
+            "defaultValue": "2019-Datacenter",
+            "allowedValues": [
+                "2008-R2-SP1",
+                "2019-Datacenter",
+                "2012-Datacenter",
+                "2012-R2-Datacenter",
+                "Windows-Server-Technical-Preview"
+            ],
+            "type": "String"
+        },
+        "azureappsvcplanName": {
+            "minLength": 1,
+            "type": "String"
+        },
+        "azureappsvcplanSkuName": {
+            "defaultValue": "F1",
+            "allowedValues": [
+                "F1",
+                "D1",
+                "B1",
+                "B2",
+                "B3",
+                "S1",
+                "S2",
+                "S3",
+                "P1",
+                "P2",
+                "P3",
+                "P4"
+            ],
+            "type": "String",
+            "metadata": {
+                "description": "Describes plan's pricing tier and capacity. Check details at https://azure.microsoft.com/en-us/pricing/details/app-service/"
+            }
+        },
+        "azsqlserverAdminLogin": {
+            "minLength": 1,
+            "type": "String"
+        },
+        "azsqlserverAdminLoginPassword": {
+            "type": "SecureString"
+        },
+        "azsqldbName": {
+            "minLength": 1,
+            "type": "String"
+        },
+        "azsqldbCollation": {
+            "defaultValue": "SQL_Latin1_General_CP1_CI_AS",
+            "minLength": 1,
+            "type": "String"
+        },
+        "azsqldbEdition": {
+            "defaultValue": "Basic",
+            "allowedValues": [
+                "Basic",
+                "Standard",
+                "Premium"
+            ],
+            "type": "String"
+        },
+        "azsqldbRequestedServiceObjectiveName": {
+            "defaultValue": "Basic",
+            "allowedValues": [
+                "Basic",
+                "S0",
+                "S1",
+                "S2",
+                "P1",
+                "P2",
+                "P3"
+            ],
+            "type": "String",
+            "metadata": {
+                "description": "Describes the performance level for Edition"
+            }
+        }
+    },
+    "variables": {
+        "azstorageaccountName": "[concat('azarm203022', uniqueString(resourceGroup().id))]",
+        "azvnetPrefix": "10.0.0.0/16",
+        "azvnetSubnet1Name": "Subnet-1",
+        "azvnetSubnet1Prefix": "10.0.0.0/24",
+        "azvnetSubnet2Name": "Subnet-2",
+        "azvnetSubnet2Prefix": "10.0.1.0/24",
+        "windowsserverImagePublisher": "MicrosoftWindowsServer",
+        "windowsserverImageOffer": "WindowsServer",
+        "windowsserverOSDiskName": "windowsserverOSDisk",
+        "windowsserverVmSize": "Standard_D4s_v3",
+        "windowsserverVnetID": "[resourceId('Microsoft.Network/virtualNetworks', 'azvnet')]",
+        "windowsserverSubnetRef": "[concat(variables('windowsserverVnetID'), '/subnets/', variables('azvnetSubnet1Name'))]",
+        "windowsserverStorageAccountContainerName": "vhds",
+        "windowsserverNicName": "[concat(parameters('windowsserverName'), 'NetworkInterface')]",
+        "azurewebappName": "[concat('azurewebapp', uniqueString(resourceGroup().id))]",
+        "azsqlserverName": "[concat('azsqlserver', uniqueString(resourceGroup().id))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Storage/storageAccounts",
+            "apiVersion": "2016-01-01",
+            "name": "[variables('azstorageaccountName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [],
+            "tags": {
+                "displayName": "azstorageaccount"
+            },
+            "sku": {
+                "name": "[parameters('azstorageaccountType')]"
+            },
+            "kind": "Storage"
+        },
+        {
+            "type": "Microsoft.Network/virtualNetworks",
+            "apiVersion": "2016-03-30",
+            "name": "azvnet",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [],
+            "tags": {
+                "displayName": "azvnet"
+            },
+            "properties": {
+                "addressSpace": {
+                    "addressPrefixes": [
+                        "[variables('azvnetPrefix')]"
+                    ]
+                },
+                "subnets": [
+                    {
+                        "name": "[variables('azvnetSubnet1Name')]",
+                        "properties": {
+                            "addressPrefix": "[variables('azvnetSubnet1Prefix')]"
+                        }
+                    },
+                    {
+                        "name": "[variables('azvnetSubnet2Name')]",
+                        "properties": {
+                            "addressPrefix": "[variables('azvnetSubnet2Prefix')]"
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "type": "Microsoft.Network/networkInterfaces",
+            "apiVersion": "2016-03-30",
+            "name": "[variables('windowsserverNicName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Network/virtualNetworks', 'azvnet')]"
+            ],
+            "tags": {
+                "displayName": "windowsserverNic"
+            },
+            "properties": {
+                "ipConfigurations": [
+                    {
+                        "name": "ipconfig1",
+                        "properties": {
+                            "privateIPAllocationMethod": "Dynamic",
+                            "subnet": {
+                                "id": "[variables('windowsserverSubnetRef')]"
+                            }
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "type": "Microsoft.Compute/virtualMachines",
+            "apiVersion": "2015-06-15",
+            "name": "[parameters('windowsserverName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('azstorageaccountName'))]",
+                "[resourceId('Microsoft.Network/networkInterfaces', variables('windowsserverNicName'))]"
+            ],
+            "tags": {
+                "displayName": "windowsserver"
+            },
+            "properties": {
+                "hardwareProfile": {
+                    "vmSize": "[variables('windowsserverVmSize')]"
+                },
+                "osProfile": {
+                    "computerName": "[parameters('windowsserverName')]",
+                    "adminUsername": "[parameters('windowsserverAdminUsername')]",
+                    "adminPassword": "[parameters('windowsserverAdminPassword')]"
+                },
+                "storageProfile": {
+                    "imageReference": {
+                        "publisher": "[variables('windowsserverImagePublisher')]",
+                        "offer": "[variables('windowsserverImageOffer')]",
+                        "sku": "[parameters('windowsserverWindowsOSVersion')]",
+                        "version": "latest"
+                    },
+                    "osDisk": {
+                        "name": "windowsserverOSDisk",
+                        "vhd": {
+                            "uri": "[concat(reference(resourceId('Microsoft.Storage/storageAccounts', variables('azstorageaccountName')), '2016-01-01').primaryEndpoints.blob, variables('windowsserverStorageAccountContainerName'), '/', variables('windowsserverOSDiskName'), '.vhd')]"
+                        },
+                        "caching": "ReadWrite",
+                        "createOption": "FromImage"
+                    }
+                },
+                "networkProfile": {
+                    "networkInterfaces": [
+                        {
+                            "id": "[resourceId('Microsoft.Network/networkInterfaces', variables('windowsserverNicName'))]"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/serverfarms",
+            "apiVersion": "2015-08-01",
+            "name": "[parameters('azureappsvcplanName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [],
+            "tags": {
+                "displayName": "azureappsvcplan"
+            },
+            "sku": {
+                "name": "[parameters('azureappsvcplanSkuName')]"
+            },
+            "properties": {
+                "name": "[parameters('azureappsvcplanName')]",
+                "numberOfWorkers": 1
+            }
+        },
+        {
+            "type": "Microsoft.Web/sites",
+            "apiVersion": "2015-08-01",
+            "name": "[variables('azurewebappName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/serverfarms', parameters('azureappsvcplanName'))]"
+            ],
+            "tags": {
+                "[concat('hidden-related:', resourceId('Microsoft.Web/serverfarms', parameters('azureappsvcplanName')))]": "Resource",
+                "displayName": "azurewebapp"
+            },
+            "properties": {
+                "name": "[variables('azurewebappName')]",
+                "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', parameters('azureappsvcplanName'))]"
+            }
+        },
+        {
+            "type": "Microsoft.Insights/autoscalesettings",
+            "apiVersion": "2014-04-01",
+            "name": "[concat(parameters('azureappsvcplanName'), '-', resourceGroup().name)]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/serverfarms', parameters('azureappsvcplanName'))]"
+            ],
+            "tags": {
+                "[concat('hidden-link:', resourceId('Microsoft.Web/serverfarms', parameters('azureappsvcplanName')))]": "Resource",
+                "displayName": "azureappinsights AutoScale"
+            },
+            "properties": {
+                "name": "[concat(parameters('azureappsvcplanName'), '-', resourceGroup().name)]",
+                "profiles": [
+                    {
+                        "name": "Default",
+                        "capacity": {
+                            "minimum": 1,
+                            "maximum": 2,
+                            "default": 1
+                        },
+                        "rules": [
+                            {
+                                "metricTrigger": {
+                                    "metricName": "CpuPercentage",
+                                    "metricResourceUri": "[resourceId('Microsoft.Web/serverfarms', parameters('azureappsvcplanName'))]",
+                                    "timeGrain": "PT1M",
+                                    "statistic": "Average",
+                                    "timeWindow": "PT10M",
+                                    "timeAggregation": "Average",
+                                    "operator": "GreaterThan",
+                                    "threshold": 80
+                                },
+                                "scaleAction": {
+                                    "direction": "Increase",
+                                    "type": "ChangeCount",
+                                    "value": 1,
+                                    "cooldown": "PT10M"
+                                }
+                            },
+                            {
+                                "metricTrigger": {
+                                    "metricName": "CpuPercentage",
+                                    "metricResourceUri": "[resourceId('Microsoft.Web/serverfarms', parameters('azureappsvcplanName'))]",
+                                    "timeGrain": "PT1M",
+                                    "statistic": "Average",
+                                    "timeWindow": "PT1H",
+                                    "timeAggregation": "Average",
+                                    "operator": "LessThan",
+                                    "threshold": 60
+                                },
+                                "scaleAction": {
+                                    "direction": "Decrease",
+                                    "type": "ChangeCount",
+                                    "value": 1,
+                                    "cooldown": "PT1H"
+                                }
+                            }
+                        ]
+                    }
+                ],
+                "enabled": false,
+                "targetResourceUri": "[resourceId('Microsoft.Web/serverfarms', parameters('azureappsvcplanName'))]"
+            }
+        },
+        {
+            "type": "Microsoft.Insights/components",
+            "apiVersion": "2014-04-01",
+            "name": "azureappinsights",
+            "location": "East US",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/sites', variables('azurewebappName'))]"
+            ],
+            "tags": {
+                "displayName": "Component azureappinsights"
+            },
+            "properties": {
+                "applicationId": "[resourceId('Microsoft.Web/sites', variables('azurewebappName'))]"
+            }
+        },
+        {
+            "type": "Microsoft.Sql/servers",
+            "apiVersion": "2014-04-01-preview",
+            "name": "[variables('azsqlserverName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [],
+            "tags": {
+                "displayName": "azsqlserver"
+            },
+            "properties": {
+                "administratorLogin": "[parameters('azsqlserverAdminLogin')]",
+                "administratorLoginPassword": "[parameters('azsqlserverAdminLoginPassword')]"
+            },
+            "resources": [
+                {
+                    "type": "firewallrules",
+                    "apiVersion": "2014-04-01-preview",
+                    "name": "AllowAllWindowsAzureIps",
+                    "location": "[resourceGroup().location]",
+                    "dependsOn": [
+                        "[resourceId('Microsoft.Sql/servers', variables('azsqlserverName'))]"
+                    ],
+                    "properties": {
+                        "startIpAddress": "0.0.0.0",
+                        "endIpAddress": "0.0.0.0"
+                    }
+                },
+                {
+                    "type": "databases",
+                    "apiVersion": "2014-04-01-preview",
+                    "name": "[parameters('azsqldbName')]",
+                    "location": "[resourceGroup().location]",
+                    "dependsOn": [
+                        "[resourceId('Microsoft.Sql/servers', variables('azsqlserverName'))]"
+                    ],
+                    "tags": {
+                        "displayName": "azsqldb"
+                    },
+                    "properties": {
+                        "collation": "[parameters('azsqldbCollation')]",
+                        "edition": "[parameters('azsqldbEdition')]",
+                        "maxSizeBytes": "1073741824",
+                        "requestedServiceObjectiveName": "[parameters('azsqldbRequestedServiceObjectiveName')]"
+                    }
+                }
+            ]
+        },
+        {
+            "type": "Microsoft.ContainerRegistry/registries",
+            "apiVersion": "2019-05-01",
+            "name": "myazcontainerregistry20",
+            "location": "[resourceGroup().location]",
+            "sku": {
+                "name": "Basic"
+            },
+            "properties": {
+                "adminUserEnabled": true
+            }
+        }
+    ],
+    "outputs": {}
+}
